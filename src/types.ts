@@ -1,0 +1,32 @@
+export interface StoredFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  date: string;
+  timestamp: number;
+  isPublic: boolean;
+  blob?: Blob;
+  previewUrl?: string;
+  contentSnippet?: string;
+}
+
+export type ViewMode = 'home' | 'manager';
+
+export type FileFilter = 'all' | 'image' | 'document' | 'code' | 'archive' | 'media';
+
+export type SortField = 'date' | 'name' | 'size';
+export type SortOrder = 'asc' | 'desc';
+
+export interface PermissionSettings {
+  isPublic: boolean;
+  passwordProtected: boolean;
+  password?: string;
+  allowDownload: boolean;
+}
+
+export interface ToastMessage {
+  id: string;
+  type: 'success' | 'error' | 'info';
+  message: string;
+}
