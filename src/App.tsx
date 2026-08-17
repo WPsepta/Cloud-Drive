@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StoredFile, ViewMode, PermissionSettings, ToastMessage } from './types';
+import { Instagram, MessageCircle, Music2 } from 'lucide-react';
+import { StoredFile, ViewMode, ToastMessage } from './types';
 import {
-  getAllFiles,
-  saveFile,
-  saveMultipleFiles,
-  deleteFileFromStorage,
-  deleteMultipleFilesFromStorage,
-  updateFileNameInStorage,
-} from './utils/storage';
-import { formatDate } from './utils/formatters';
+  fetchFilesAndSettings,
+  uploadFilesWithProgress,
+  deleteFileFromServer,
+  batchDeleteFilesFromServer,
+  clearAllFilesFromServer,
+  renameFileOnServer,
+} from './utils/api';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { HomeView } from './components/HomeView';
@@ -16,7 +16,6 @@ import { FileManagerView } from './components/FileManagerView';
 import { FilePreviewModal } from './components/FilePreviewModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { RenameModal } from './components/RenameModal';
-import { PermissionsModal } from './components/PermissionsModal';
 import { Toast } from './components/Toast';
 
 export default function App() {
@@ -24,6 +23,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState<ViewMode>('home');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [, setIsLoading] = useState(true);
   
   // Modals state
   const [previewFile, setPreviewFile] = useState<StoredFile | null>(null);
@@ -31,14 +31,6 @@ export default function App() {
   const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
   const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
   const [fileToRename, setFileToRename] = useState<StoredFile | null>(null);
-  const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
-
-  // Permission settings
-  const [permissions, setPermissions] = useState<PermissionSettings>({
-    isPublic: true,
-    passwordProtected: false,
-    allowDownload: true,
-  });
 
   // Upload Progress
   const [uploadProgress, setUploadProgress] = useState<{
@@ -56,11 +48,13 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load files on mount
+  // Load files from server on mount
   useEffect(() => {
     async function load() {
-      const stored = await getAllFiles();
-      setFiles(stored);
+      setIsLoading(true);
+      const res = await fetchFilesAndSettings();
+      setFiles(res.files);
+      setIsLoading(false);
     }
     load();
   }, []);
@@ -85,7 +79,7 @@ export default function App() {
     }
   };
 
-  // File Upload Processor
+  // File Upload Processor - uploads directly to Cloud Server
   const handleFilesSelected = async (fileList: FileList | File[] | null) => {
     if (!fileList || fileList.length === 0) return;
     const fileArray = Array.from(fileList);
@@ -96,136 +90,105 @@ export default function App() {
 
     setUploadProgress({
       isUploading: true,
-      progress: 15,
+      progress: 10,
       currentFileName: fileArray[0].name,
     });
 
-    // Simulate animated upload stages
-    const progressTimer1 = setTimeout(() => {
-      setUploadProgress((prev) => ({ ...prev, progress: 55 }));
-    }, 150);
+    try {
+      const result = await uploadFilesWithProgress(fileArray, (progress, currentName) => {
+        setUploadProgress({
+          isUploading: true,
+          progress: Math.min(95, progress),
+          currentFileName: currentName,
+        });
+      });
 
-    const progressTimer2 = setTimeout(() => {
-      setUploadProgress((prev) => ({ ...prev, progress: 85 }));
-    }, 300);
+      if (result.success && result.files) {
+        setFiles((prev) => [...result.files!, ...prev]);
+        setUploadProgress({
+          isUploading: true,
+          progress: 100,
+          currentFileName: 'Selesai!',
+        });
 
-    // Read and convert files
-    const newStoredFiles: StoredFile[] = [];
+        setTimeout(() => {
+          setUploadProgress({
+            isUploading: false,
+            progress: 0,
+            currentFileName: '',
+          });
+        }, 400);
 
-    for (let i = 0; i < fileArray.length; i++) {
-      const f = fileArray[i];
-      const ext = f.name.split('.').pop()?.toLowerCase() || 'txt';
-      const now = new Date();
-      const id = 'file_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substring(2, 6);
-
-      let snippet: string | undefined = undefined;
-      // Read text snippet for text/code files
-      if (
-        f.type.startsWith('text/') ||
-        ['txt', 'js', 'ts', 'jsx', 'tsx', 'html', 'css', 'json', 'py', 'bat', 'ps1', 'sh', 'sql', 'md'].includes(ext)
-      ) {
-        try {
-          const text = await f.slice(0, 5000).text();
-          snippet = text;
-        } catch (e) {
-          console.warn('Could not read text slice:', e);
-        }
+        addToast(`Berhasil mengunggah ${fileArray.length} berkas ke drive cloud!`, 'success');
+      } else {
+        throw new Error(result.message || 'Gagal mengunggah berkas');
       }
-
-      const previewUrl = URL.createObjectURL(f);
-
-      const newStored: StoredFile = {
-        id,
-        name: f.name,
-        size: f.size,
-        type: ext,
-        date: formatDate(now),
-        timestamp: Date.now() + i,
-        isPublic: permissions.isPublic,
-        blob: f,
-        previewUrl,
-        contentSnippet: snippet,
-      };
-
-      newStoredFiles.push(newStored);
-    }
-
-    clearTimeout(progressTimer1);
-    clearTimeout(progressTimer2);
-
-    // Save to IndexedDB
-    await saveMultipleFiles(newStoredFiles);
-
-    // Update state
-    setFiles((prev) => [...newStoredFiles, ...prev]);
-
-    setUploadProgress({
-      isUploading: true,
-      progress: 100,
-      currentFileName: 'Selesai!',
-    });
-
-    setTimeout(() => {
+    } catch (err: any) {
+      console.error('Upload failed:', err);
       setUploadProgress({
         isUploading: false,
         progress: 0,
         currentFileName: '',
       });
-    }, 450);
-
-    addToast(`Berhasil mengunggah ${fileArray.length} berkas ke drive cloud!`, 'success');
+      addToast(`Gagal mengunggah: ${err.message || 'Koneksi bermasalah'}`, 'error');
+    }
   };
 
-  // Download Handler
+  // Download Handler - downloads from server binary endpoint
   const handleDownload = (file: StoredFile) => {
-    let url = file.previewUrl;
-    let createdUrl = false;
+    const downloadUrl = `/api/files/${file.id}/download`;
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
-    if (!url && file.blob) {
-      url = URL.createObjectURL(file.blob);
-      createdUrl = true;
-    } else if (!url && file.contentSnippet) {
-      const blob = new Blob([file.contentSnippet], { type: 'text/plain;charset=utf-8' });
-      url = URL.createObjectURL(blob);
-      createdUrl = true;
-    }
+    addToast(`Mengunduh berkas: ${file.name}`, 'info');
+  };
 
-    if (url) {
+  // Download all selected files
+  const handleDownloadSelected = async () => {
+    if (selectedFileIds.length === 0) return;
+    const selectedFiles = files.filter((f) => selectedFileIds.includes(f.id));
+    addToast(`Memulai unduhan untuk ${selectedFiles.length} berkas...`, 'info');
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      const downloadUrl = `/api/files/${file.id}/download`;
       const link = document.createElement('a');
-      link.href = url;
+      link.href = downloadUrl;
       link.download = file.name;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      if (createdUrl) {
-        setTimeout(() => URL.revokeObjectURL(url!), 1000);
+      if (i < selectedFiles.length - 1) {
+        await new Promise((r) => setTimeout(r, 400));
       }
-      addToast(`Mengunduh berkas: ${file.name}`, 'info');
-    } else {
-      addToast(`Tidak dapat mengunduh berkas ${file.name}`, 'error');
     }
   };
 
-  // Single File Delete
+  // Single File Delete - deletes from Cloud Server
   const handleConfirmSingleDelete = async () => {
     if (!fileToDelete) return;
     const targetId = fileToDelete.id;
     const targetName = fileToDelete.name;
 
-    // Delete from storage
-    await deleteFileFromStorage(targetId);
+    const ok = await deleteFileFromServer(targetId);
+    if (ok) {
+      setFiles((prev) => prev.filter((f) => f.id !== targetId));
+      setSelectedFileIds((prev) => prev.filter((id) => id !== targetId));
 
-    // Update state immediately
-    setFiles((prev) => prev.filter((f) => f.id !== targetId));
-    setSelectedFileIds((prev) => prev.filter((id) => id !== targetId));
+      if (previewFile?.id === targetId) {
+        setPreviewFile(null);
+      }
 
-    if (previewFile?.id === targetId) {
-      setPreviewFile(null);
+      setFileToDelete(null);
+      addToast(`Berkas "${targetName}" berhasil dihapus dari cloud drive`, 'success');
+    } else {
+      addToast(`Gagal menghapus berkas "${targetName}"`, 'error');
     }
-
-    setFileToDelete(null);
-    addToast(`Berkas "${targetName}" berhasil dihapus`, 'success');
   };
 
   // Batch Delete
@@ -233,47 +196,56 @@ export default function App() {
     if (selectedFileIds.length === 0) return;
 
     const count = selectedFileIds.length;
-    await deleteMultipleFilesFromStorage(selectedFileIds);
+    const ok = await batchDeleteFilesFromServer(selectedFileIds);
 
-    setFiles((prev) => prev.filter((f) => !selectedFileIds.includes(f.id)));
-    setSelectedFileIds([]);
-    setIsBatchDeleteModalOpen(false);
+    if (ok) {
+      setFiles((prev) => prev.filter((f) => !selectedFileIds.includes(f.id)));
+      setSelectedFileIds([]);
+      setIsBatchDeleteModalOpen(false);
 
-    addToast(`Berhasil menghapus ${count} berkas`, 'success');
+      addToast(`Berhasil menghapus ${count} berkas`, 'success');
+    } else {
+      addToast('Gagal menghapus berkas terpilih', 'error');
+    }
   };
 
   // Clear All Files
   const handleConfirmClearAll = async () => {
-    const allIds = files.map((f) => f.id);
-    await deleteMultipleFilesFromStorage(allIds);
+    const ok = await clearAllFilesFromServer();
+    if (ok) {
+      setFiles([]);
+      setSelectedFileIds([]);
+      setIsClearAllModalOpen(false);
 
-    setFiles([]);
-    setSelectedFileIds([]);
-    setIsClearAllModalOpen(false);
-
-    addToast('Semua berkas di drive cloud telah dibersihkan', 'success');
+      addToast('Semua berkas di drive cloud telah dibersihkan', 'success');
+    } else {
+      addToast('Gagal membersihkan berkas', 'error');
+    }
   };
 
   // Rename File
   const handleRename = async (fileId: string, newName: string) => {
-    await updateFileNameInStorage(fileId, newName);
+    const ok = await renameFileOnServer(fileId, newName);
+    if (ok) {
+      setFiles((prev) =>
+        prev.map((f) => {
+          if (f.id === fileId) {
+            const ext = newName.split('.').pop()?.toLowerCase() || f.type;
+            return { ...f, name: newName, type: ext };
+          }
+          return f;
+        })
+      );
 
-    setFiles((prev) =>
-      prev.map((f) => {
-        if (f.id === fileId) {
-          const ext = newName.split('.').pop()?.toLowerCase() || f.type;
-          return { ...f, name: newName, type: ext };
-        }
-        return f;
-      })
-    );
+      if (previewFile?.id === fileId) {
+        const ext = newName.split('.').pop()?.toLowerCase() || previewFile.type;
+        setPreviewFile({ ...previewFile, name: newName, type: ext });
+      }
 
-    if (previewFile?.id === fileId) {
-      const ext = newName.split('.').pop()?.toLowerCase() || previewFile.type;
-      setPreviewFile({ ...previewFile, name: newName, type: ext });
+      addToast(`Nama berkas diubah menjadi "${newName}"`, 'success');
+    } else {
+      addToast('Gagal mengubah nama berkas', 'error');
     }
-
-    addToast(`Nama berkas diubah menjadi "${newName}"`, 'success');
   };
 
   // Selection handlers
@@ -295,9 +267,9 @@ export default function App() {
   const handleShareLink = () => {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(window.location.href);
-      addToast('Tautan drive cloud berhasil disalin ke papan klip!', 'success');
+      addToast('Tautan drive cloud berhasil disalin! Siapa pun yang membuka tautan dapat melihat berkas.', 'success');
     } else {
-      addToast('Tautan siap dibagikan: ' + window.location.href, 'info');
+      addToast('Tautan publik: ' + window.location.href, 'info');
     }
   };
 
@@ -323,7 +295,6 @@ export default function App() {
         onViewChange={setCurrentView}
         onToggleSidebar={() => setIsSidebarOpen(true)}
         onTriggerUpload={triggerFileInput}
-        onOpenPermissions={() => setIsPermissionsModalOpen(true)}
         fileCount={files.length}
       />
 
@@ -333,7 +304,6 @@ export default function App() {
         onClose={() => setIsSidebarOpen(false)}
         currentView={currentView}
         onViewChange={setCurrentView}
-        onOpenPermissions={() => setIsPermissionsModalOpen(true)}
         totalFiles={files.length}
         totalSize={totalSize}
         onClearAllPrompt={() => setIsClearAllModalOpen(true)}
@@ -357,10 +327,10 @@ export default function App() {
             onDeselectAll={handleDeselectAll}
             onPreviewFile={(f) => setPreviewFile(f)}
             onDownloadFile={handleDownload}
+            onDownloadSelectedFiles={handleDownloadSelected}
             onRenameFile={(f) => setFileToRename(f)}
             onDeleteFile={(f) => setFileToDelete(f)}
             onBatchDeletePrompt={() => setIsBatchDeleteModalOpen(true)}
-            onOpenPermissions={() => setIsPermissionsModalOpen(true)}
             onShareLink={handleShareLink}
             onTriggerUpload={triggerFileInput}
             onDropFiles={handleFilesSelected}
@@ -374,36 +344,66 @@ export default function App() {
         <div className="flex flex-wrap justify-center gap-4 sm:gap-6 font-medium">
           <button
             onClick={() => setCurrentView('home')}
-            className={`transition ${currentView === 'home' ? 'text-blue-400' : 'hover:text-white'}`}
+            className={`transition cursor-pointer ${currentView === 'home' ? 'text-blue-400' : 'hover:text-white'}`}
           >
             Home
           </button>
           <button
             onClick={() => setCurrentView('manager')}
-            className={`transition ${currentView === 'manager' ? 'text-blue-400' : 'hover:text-white'}`}
+            className={`transition cursor-pointer ${currentView === 'manager' ? 'text-blue-400' : 'hover:text-white'}`}
           >
             File Manager
-          </button>
-          <button
-            onClick={() => setIsPermissionsModalOpen(true)}
-            className="hover:text-white transition"
-          >
-            Access & Permissions
           </button>
           <a href="mailto:rikasma009@gmail.com" className="hover:text-white transition">
             Contact: rikasma009@gmail.com
           </a>
         </div>
-        <div className="text-slate-400">
-          FileKu © 2026 • Created by{' '}
+
+        {/* Social Icons (TikTok, Instagram, WhatsApp) */}
+        <div className="flex items-center justify-center space-x-3 pt-1">
+          {/* TikTok */}
           <a
-            href="https://tiktok.com/@wp_septa"
+            id="footerLinkTiktok"
+            href="https://www.tiktok.com/@wp_septa"
             target="_blank"
             rel="noreferrer"
-            className="text-blue-400 hover:underline font-medium"
+            className="p-2 rounded-xl bg-[#131d3b] border border-[#1e2c54] text-slate-300 hover:text-cyan-400 hover:border-cyan-500/40 hover:bg-[#18244d] transition"
+            title="TikTok: @wp_septa"
+            aria-label="TikTok: @wp_septa"
           >
-            WP septa
+            <Music2 className="w-4 h-4" />
           </a>
+
+          {/* Instagram */}
+          <a
+            id="footerLinkInstagram"
+            href="https://www.instagram.com/wp_septaa/"
+            target="_blank"
+            rel="noreferrer"
+            className="p-2 rounded-xl bg-[#131d3b] border border-[#1e2c54] text-slate-300 hover:text-pink-400 hover:border-pink-500/40 hover:bg-[#18244d] transition"
+            title="Instagram: @wp_septaa"
+            aria-label="Instagram: @wp_septaa"
+          >
+            <Instagram className="w-4 h-4" />
+          </a>
+
+          {/* WhatsApp */}
+          <a
+            id="footerLinkWhatsApp"
+            href="https://wa.me/817089287819"
+            target="_blank"
+            rel="noreferrer"
+            className="p-2 rounded-xl bg-[#131d3b] border border-[#1e2c54] text-slate-300 hover:text-emerald-400 hover:border-emerald-500/40 hover:bg-[#18244d] transition"
+            title="WhatsApp: +81 70-8928-7819"
+            aria-label="WhatsApp: +81 70-8928-7819"
+          >
+            <MessageCircle className="w-4 h-4" />
+          </a>
+        </div>
+
+        <div className="text-slate-400 pt-1">
+          FileKu © 2026 • Created by{' '}
+          <span className="text-slate-200 font-medium">WP septa</span>
         </div>
       </footer>
 
@@ -447,18 +447,6 @@ export default function App() {
         isOpen={Boolean(fileToRename)}
         onClose={() => setFileToRename(null)}
         onRename={handleRename}
-      />
-
-      {/* Access Permissions Modal */}
-      <PermissionsModal
-        isOpen={isPermissionsModalOpen}
-        onClose={() => setIsPermissionsModalOpen(false)}
-        settings={permissions}
-        onSave={(newSettings) => {
-          setPermissions(newSettings);
-          addToast('Pengaturan izin drive berhasil disimpan!', 'success');
-        }}
-        onShareLink={handleShareLink}
       />
 
       {/* Toast Notifications */}

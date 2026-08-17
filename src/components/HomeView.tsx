@@ -11,7 +11,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { StoredFile } from '../types';
-import { formatBytes } from '../utils/formatters';
+import { formatBytes, formatDate } from '../utils/formatters';
+import { FileFormatIcon } from './FileFormatIcon';
 
 interface HomeViewProps {
   files: StoredFile[];
@@ -88,7 +89,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </h1>
 
           <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-            Simpan, kelola, pratinjau, dan hapus berkas publik Anda secara cepat dan stabil dengan indikator upload langsung.
+            Simpan, kelola, pratinjau, dan hapus berkas Anda secara cepat dan stabil dengan indikator upload langsung.
           </p>
         </div>
 
@@ -170,7 +171,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <button
           id="btnQuickViewDrive"
           onClick={onOpenManager}
-          className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#1e2c54] hover:bg-blue-600 text-slate-200 hover:text-white transition text-xs font-semibold flex items-center justify-center space-x-2"
+          className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#1e2c54] hover:bg-blue-600 text-slate-200 hover:text-white transition text-xs font-semibold flex items-center justify-center space-x-2 cursor-pointer"
         >
           <span>Buka Pengelola Berkas</span>
           <ArrowRight className="w-4 h-4" />
@@ -187,29 +188,39 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </h3>
             <button
               onClick={onOpenManager}
-              className="text-xs text-blue-400 hover:text-blue-300 font-medium"
+              className="text-xs text-blue-400 hover:text-blue-300 font-medium cursor-pointer"
             >
               Lihat Semua ({files.length})
             </button>
           </div>
 
           <div className="divide-y divide-[#1e2c54]/70">
-            {files.slice(0, 3).map((file) => (
-              <div key={file.id} className="py-2.5 flex items-center justify-between">
-                <div className="flex items-center space-x-3 overflow-hidden pr-2">
-                  <div className="w-8 h-8 rounded-lg bg-[#0b1329] border border-[#1e2c54] flex items-center justify-center text-blue-400 shrink-0 text-xs font-bold uppercase">
-                    {file.type.slice(0, 3)}
+            {files.slice(0, 3).map((file) => {
+              const dateDisplay = file.timestamp
+                ? formatDate(new Date(file.timestamp))
+                : file.date || formatDate(new Date());
+
+              return (
+                <div
+                  key={file.id}
+                  onClick={onOpenManager}
+                  className="py-3 flex items-center justify-between hover:bg-[#18244d]/40 px-2 rounded-xl transition cursor-pointer"
+                >
+                  <div className="flex items-center space-x-3 overflow-hidden pr-2">
+                    <div className="w-8 h-8 rounded-lg bg-[#0b1329] border border-[#1e2c54] flex items-center justify-center shrink-0">
+                      <FileFormatIcon filename={file.name} size="sm" />
+                    </div>
+                    <div className="overflow-hidden">
+                      <p className="text-xs sm:text-sm font-semibold text-slate-200 truncate">{file.name}</p>
+                      <p className="text-[11px] text-slate-400">{dateDisplay} • {formatBytes(file.size)}</p>
+                    </div>
                   </div>
-                  <div className="overflow-hidden">
-                    <p className="text-xs font-medium text-slate-200 truncate">{file.name}</p>
-                    <p className="text-[10px] text-slate-400">{file.date} • {formatBytes(file.size)}</p>
-                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium shrink-0">
+                    Cloud
+                  </span>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium shrink-0">
-                  Publik
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

@@ -5,10 +5,11 @@ import {
   Home,
   HardDrive,
   Mail,
-  ShieldCheck,
-  ExternalLink,
   PieChart,
   Trash2,
+  Instagram,
+  MessageCircle,
+  Music2,
 } from 'lucide-react';
 import { ViewMode } from '../types';
 import { formatBytes } from '../utils/formatters';
@@ -18,7 +19,6 @@ interface SidebarProps {
   onClose: () => void;
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
-  onOpenPermissions: () => void;
   totalFiles: number;
   totalSize: number;
   onClearAllPrompt?: () => void;
@@ -29,13 +29,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   currentView,
   onViewChange,
-  onOpenPermissions,
   totalFiles,
   totalSize,
   onClearAllPrompt,
 }) => {
-  const maxStorageBytes = 100 * 1024 * 1024; // 100MB representation
-  const usagePercentage = Math.min(100, Math.max(1, Math.round((totalSize / maxStorageBytes) * 100)));
+  const maxStorageBytes = 15 * 1024 * 1024 * 1024; // 15GB Cloud Storage
+  const usagePercentage = Math.min(100, Math.max(totalSize > 0 ? 1 : 0, Math.round((totalSize / maxStorageBytes) * 100)));
 
   return (
     <>
@@ -68,7 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               id="btnCloseSidebar"
               onClick={onClose}
-              className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-[#1e2c54] transition"
+              className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-[#1e2c54] transition cursor-pointer"
               aria-label="Tutup Menu"
             >
               <X className="w-5 h-5" />
@@ -97,7 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onViewChange('home');
                 onClose();
               }}
-              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer ${
                 currentView === 'home'
                   ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
                   : 'text-slate-300 hover:bg-[#1e2c54] hover:text-white'
@@ -113,7 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onViewChange('manager');
                 onClose();
               }}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition ${
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer ${
                 currentView === 'manager'
                   ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
                   : 'text-slate-300 hover:bg-[#1e2c54] hover:text-white'
@@ -121,23 +120,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <div className="flex items-center space-x-3">
                 <HardDrive className="w-4 h-4 text-blue-400" />
-                <span>File Manager (Drive)</span>
+                <span>File Manager</span>
               </div>
               <span className="text-xs px-2 py-0.5 rounded-full bg-[#1e2c54] text-slate-300">
                 {totalFiles}
               </span>
-            </button>
-
-            <button
-              id="menuPermissionsLink"
-              onClick={() => {
-                onOpenPermissions();
-                onClose();
-              }}
-              className="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:bg-[#1e2c54] hover:text-white transition"
-            >
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Access & Permissions</span>
             </button>
 
             <a
@@ -177,7 +164,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onClose();
                   onClearAllPrompt();
                 }}
-                className="w-full mt-2 pt-2 border-t border-[#1e2c54] text-[11px] text-rose-400 hover:text-rose-300 flex items-center justify-center space-x-1.5 transition"
+                className="w-full mt-2 pt-2 border-t border-[#1e2c54] text-[11px] text-rose-400 hover:text-rose-300 flex items-center justify-center space-x-1.5 transition cursor-pointer"
               >
                 <Trash2 className="w-3 h-3" />
                 <span>Bersihkan semua berkas</span>
@@ -186,18 +173,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* Sidebar Footer */}
-        <div className="border-t border-[#1e2c54] pt-4 text-xs text-slate-400 flex items-center justify-between">
-          <a
-            href="https://tiktok.com/@wp_septa"
-            target="_blank"
-            rel="noreferrer"
-            className="hover:text-white transition flex items-center space-x-1.5"
-          >
-            <span className="font-semibold text-slate-200">TikTok:</span>
-            <span className="text-blue-400">@wp_septa</span>
-          </a>
-          <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+        {/* Sidebar Footer with Social Icons (TikTok, Instagram, WhatsApp) */}
+        <div className="border-t border-[#1e2c54] pt-4 flex items-center justify-between">
+          <span className="text-xs font-semibold text-slate-300">WP septa</span>
+          <div className="flex items-center space-x-2">
+            {/* TikTok Icon */}
+            <a
+              id="sidebarLinkTiktok"
+              href="https://www.tiktok.com/@wp_septa"
+              target="_blank"
+              rel="noreferrer"
+              className="p-2 rounded-xl bg-[#0b1329] border border-[#1e2c54] text-slate-300 hover:text-cyan-400 hover:border-cyan-500/40 hover:bg-[#1e2c54] transition"
+              title="TikTok: @wp_septa"
+              aria-label="TikTok: @wp_septa"
+            >
+              <Music2 className="w-4 h-4" />
+            </a>
+
+            {/* Instagram Icon */}
+            <a
+              id="sidebarLinkInstagram"
+              href="https://www.instagram.com/wp_septaa/"
+              target="_blank"
+              rel="noreferrer"
+              className="p-2 rounded-xl bg-[#0b1329] border border-[#1e2c54] text-slate-300 hover:text-pink-400 hover:border-pink-500/40 hover:bg-[#1e2c54] transition"
+              title="Instagram: @wp_septaa"
+              aria-label="Instagram: @wp_septaa"
+            >
+              <Instagram className="w-4 h-4" />
+            </a>
+
+            {/* WhatsApp Icon */}
+            <a
+              id="sidebarLinkWhatsApp"
+              href="https://wa.me/817089287819"
+              target="_blank"
+              rel="noreferrer"
+              className="p-2 rounded-xl bg-[#0b1329] border border-[#1e2c54] text-slate-300 hover:text-emerald-400 hover:border-emerald-500/40 hover:bg-[#1e2c54] transition"
+              title="WhatsApp: +81 70-8928-7819"
+              aria-label="WhatsApp: +81 70-8928-7819"
+            >
+              <MessageCircle className="w-4 h-4" />
+            </a>
+          </div>
         </div>
       </aside>
     </>

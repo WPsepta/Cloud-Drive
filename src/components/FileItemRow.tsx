@@ -1,21 +1,16 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  FileText,
-  FileCode,
-  FileSpreadsheet,
-  FileArchive,
-  FileVideo,
-  FileAudio,
-  FileImage,
+  Calendar,
+  MoreVertical,
   Download,
   Trash2,
   Eye,
   Edit2,
-  Globe,
-  Lock,
+  Check,
 } from 'lucide-react';
 import { StoredFile } from '../types';
-import { formatBytes, getFileCategory, getFileTypeBadgeColor } from '../utils/formatters';
+import { formatBytes, formatDate } from '../utils/formatters';
+import { FileFormatIcon } from './FileFormatIcon';
 
 interface FileItemRowProps {
   file: StoredFile;
@@ -36,143 +31,194 @@ export const FileItemRow: React.FC<FileItemRowProps> = ({
   onRename,
   onDelete,
 }) => {
-  const category = getFileCategory(file.name);
-  const badgeColors = getFileTypeBadgeColor(file.type);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  // Render appropriate category icon
-  const renderIcon = () => {
-    switch (category) {
-      case 'image':
-        return <FileImage className="w-5 h-5 text-emerald-400" />;
-      case 'code':
-        return <FileCode className="w-5 h-5 text-amber-400" />;
-      case 'document':
-        return <FileText className="w-5 h-5 text-rose-400" />;
-      case 'archive':
-        return <FileArchive className="w-5 h-5 text-purple-400" />;
-      case 'media':
-        return file.type.includes('mp4') || file.type.includes('mkv') ? (
-          <FileVideo className="w-5 h-5 text-sky-400" />
-        ) : (
-          <FileAudio className="w-5 h-5 text-indigo-400" />
-        );
-      default:
-        return <FileSpreadsheet className="w-5 h-5 text-blue-400" />;
+  // Close menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
     }
-  };
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
+
+  // Real-time Indonesian date display from timestamp
+  const dateDisplay = file.timestamp
+    ? formatDate(new Date(file.timestamp))
+    : file.date || formatDate(new Date());
 
   return (
     <div
       id={`file-row-${file.id}`}
-      className={`group flex items-center justify-between p-3.5 sm:p-4 hover:bg-[#18244d]/70 transition-all ${
-        isSelected ? 'bg-[#18244d] border-l-4 border-blue-500' : ''
+      className={`group relative flex items-center justify-between px-3.5 sm:px-4 py-3 sm:py-3.5 transition-colors ${
+        isMenuOpen ? 'z-20' : 'z-0'
+      } ${
+        isSelected
+          ? 'bg-[#18244d]/90'
+          : 'hover:bg-[#18244d]/50 bg-transparent'
       }`}
     >
-      {/* Left Area: Checkbox + Icon + Details */}
-      <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 pr-2 flex-1">
-        {/* Selection Checkbox */}
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={() => onToggleSelect(file.id)}
-          className="w-4 h-4 rounded border-[#1e2c54] bg-[#0b1329] text-blue-600 focus:ring-blue-500/30 cursor-pointer shrink-0"
+      {/* Left side: Checkbox + Format-specific Icon + File Information */}
+      <div className="flex items-center space-x-3 sm:space-x-3.5 min-w-0 flex-1 pr-2">
+        {/* Custom Rounded Squarish Checkbox */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect(file.id);
+          }}
+          className={`w-5 h-5 rounded-lg border-2 transition-all flex items-center justify-center shrink-0 cursor-pointer ${
+            isSelected
+              ? 'bg-blue-600 border-blue-500 text-white shadow-sm'
+              : 'border-slate-500/70 hover:border-blue-400 bg-transparent'
+          }`}
           aria-label={`Pilih ${file.name}`}
-        />
+        >
+          {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+        </button>
 
-        {/* File Type Icon container */}
+        {/* Distinct format icon based on file extension */}
         <div
           onClick={() => onPreview(file)}
-          className="w-10 h-10 rounded-xl bg-[#0b1329] border border-[#1e2c54] flex items-center justify-center shrink-0 cursor-pointer hover:border-blue-400 transition"
-          title="Klik untuk pratinjau berkas"
+          className="w-8 h-8 rounded-xl bg-[#0b1329] border border-[#1e2c54] flex items-center justify-center shrink-0 cursor-pointer select-none hover:scale-105 hover:border-blue-400 transition"
+          title={`Pratinjau ${file.name}`}
         >
-          {renderIcon()}
+          <FileFormatIcon filename={file.name} size="sm" />
         </div>
 
-        {/* Name and Meta */}
+        {/* Text Metadata: Name on top, Calendar Date + Size on bottom */}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center space-x-2">
-            <p
-              onClick={() => onPreview(file)}
-              className="font-medium text-xs sm:text-sm text-slate-100 truncate hover:text-blue-400 cursor-pointer transition"
-              title={file.name}
-            >
-              {file.name}
-            </p>
+          <p
+            onClick={() => onPreview(file)}
+            className="font-semibold text-sm sm:text-[15px] text-slate-100 truncate hover:text-blue-400 cursor-pointer transition"
+            title={file.name}
+          >
+            {file.name}
+          </p>
 
-            {/* Public/Private Badge */}
-            {file.isPublic ? (
-              <span className="hidden sm:inline-flex items-center space-x-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0">
-                <Globe className="w-2.5 h-2.5" />
-                <span>Publik</span>
-              </span>
-            ) : (
-              <span className="hidden sm:inline-flex items-center space-x-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0">
-                <Lock className="w-2.5 h-2.5" />
-                <span>Privat</span>
-              </span>
-            )}
-
-            {/* Extension tag */}
-            <span
-              className={`hidden md:inline-block text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border ${badgeColors.bg} ${badgeColors.text} ${badgeColors.border}`}
-            >
-              {file.type || 'FILE'}
+          <div className="flex items-center space-x-2.5 text-xs text-slate-400 mt-0.5">
+            <span className="flex items-center space-x-1.5 shrink-0">
+              <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span className="whitespace-nowrap">{dateDisplay}</span>
             </span>
-          </div>
-
-          <div className="flex items-center space-x-2 text-[11px] sm:text-xs text-slate-400 mt-0.5">
-            <span>{file.date}</span>
-            <span>•</span>
-            <span className="font-mono text-slate-300">{formatBytes(file.size)}</span>
+            <span className="font-mono text-slate-300 whitespace-nowrap shrink-0">{formatBytes(file.size)}</span>
           </div>
         </div>
       </div>
 
-      {/* Right Action buttons */}
+      {/* Right side: Quick Download Button + 3-dots Menu Button */}
       <div className="flex items-center space-x-1 shrink-0">
-        {/* Preview Button */}
-        <button
-          id={`btn-preview-${file.id}`}
-          onClick={() => onPreview(file)}
-          className="p-2 text-slate-400 hover:text-blue-400 hover:bg-[#1e2c54] rounded-lg transition"
-          title="Pratinjau Berkas"
-          aria-label="Pratinjau Berkas"
-        >
-          <Eye className="w-4 h-4" />
-        </button>
-
-        {/* Download Button */}
+        {/* Direct Download Button (Desktop only, hidden on mobile/android) */}
         <button
           id={`btn-download-${file.id}`}
-          onClick={() => onDownload(file)}
-          className="p-2 text-slate-400 hover:text-emerald-400 hover:bg-[#1e2c54] rounded-lg transition"
-          title="Unduh Berkas"
-          aria-label="Unduh Berkas"
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDownload(file);
+          }}
+          className="hidden md:inline-flex p-2 text-slate-400 hover:text-emerald-400 hover:bg-[#1e2c54] rounded-xl transition cursor-pointer"
+          title={`Unduh ${file.name}`}
+          aria-label={`Unduh ${file.name}`}
         >
           <Download className="w-4 h-4" />
         </button>
 
-        {/* Rename Button */}
-        <button
-          id={`btn-rename-${file.id}`}
-          onClick={() => onRename(file)}
-          className="p-2 text-slate-400 hover:text-amber-400 hover:bg-[#1e2c54] rounded-lg transition"
-          title="Ganti Nama"
-          aria-label="Ganti Nama"
-        >
-          <Edit2 className="w-4 h-4" />
-        </button>
+        {/* 3-dots Menu Button */}
+        <div className="relative shrink-0" ref={menuRef}>
+          <button
+            id={`btn-menu-${file.id}`}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsMenuOpen((prev) => !prev);
+            }}
+            className={`p-2 rounded-xl transition cursor-pointer ${
+              isMenuOpen
+                ? 'bg-blue-600/30 text-white border border-blue-500/40'
+                : 'text-slate-400 hover:text-white hover:bg-[#1e2c54]'
+            }`}
+            title="Opsi Berkas"
+            aria-label="Opsi Berkas"
+            aria-expanded={isMenuOpen}
+          >
+            <MoreVertical className="w-4 h-4" />
+          </button>
 
-        {/* Delete Button */}
-        <button
-          id={`btn-delete-${file.id}`}
-          onClick={() => onDelete(file)}
-          className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
-          title="Hapus Berkas"
-          aria-label="Hapus Berkas"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+          {/* Popup Menu (Fixed high z-index and positioned clearly) */}
+          {isMenuOpen && (
+            <div
+              id={`dropdown-menu-${file.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="absolute right-0 top-full mt-1.5 w-44 bg-[#0b1329] border border-[#1e2c54] rounded-2xl shadow-2xl py-1.5 z-50 ring-1 ring-black/50 animate-in fade-in zoom-in-95 duration-100"
+            >
+              {/* Pratinjau */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMenuOpen(false);
+                  onPreview(file);
+                }}
+                className="w-full px-3.5 py-2 text-left text-xs text-slate-200 hover:bg-[#1e2c54] hover:text-white flex items-center space-x-2.5 transition cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span>Pratinjau</span>
+              </button>
+
+              {/* Unduh */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMenuOpen(false);
+                  onDownload(file);
+                }}
+                className="w-full px-3.5 py-2 text-left text-xs text-slate-200 hover:bg-[#1e2c54] hover:text-white flex items-center space-x-2.5 transition cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Unduh</span>
+              </button>
+
+              {/* Ganti Nama */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMenuOpen(false);
+                  onRename(file);
+                }}
+                className="w-full px-3.5 py-2 text-left text-xs text-slate-200 hover:bg-[#1e2c54] hover:text-white flex items-center space-x-2.5 transition cursor-pointer"
+              >
+                <Edit2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Ganti Nama</span>
+              </button>
+
+              <div className="my-1 border-t border-[#1e2c54]" />
+
+              {/* Hapus */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMenuOpen(false);
+                  onDelete(file);
+                }}
+                className="w-full px-3.5 py-2 text-left text-xs text-rose-400 hover:bg-rose-500/15 flex items-center space-x-2.5 transition cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Hapus</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

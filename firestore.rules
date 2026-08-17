@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Files collection
+    match /files/{fileId} {
+      allow read: if true;
+      allow create: if request.resource.data.name is string 
+                    && request.resource.data.size is number
+                    && request.resource.data.timestamp is number;
+      allow update: if request.resource.data.name is string;
+      allow delete: if true;
+    }
+
+    // Settings collection
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}
